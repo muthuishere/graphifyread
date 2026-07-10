@@ -1,0 +1,37 @@
+# graphify.toml — declare external sources, then run `graphify sync`.
+#
+# Copy this to `graphify.toml` in your project root and edit. Each [[source]]
+# is pulled into its `dest` (a folder under your project) so the normal
+# `/graphify .` / `--update` rebuild indexes it. Sync is incremental (only
+# changed files move), tombstoned (deleted originals are removed from dest),
+# and records each file's origin `uri` in graphify-out/sources.json.
+#
+# Run:
+#   graphify sync                 # all sources
+#   graphify sync <name>          # one source
+#   graphify sync --dry-run       # preview, copy nothing
+#   graphify sync --refresh       # re-fetch url sources
+
+# --- A mounted document library (SharePoint / OneDrive / Google Drive) --------
+# Mount it first with the vendor sync client or `rclone mount`, then mirror it.
+# type = sharepoint | onedrive | gdrive | local  (all mirror a local folder)
+[[source]]
+name = "design-docs"
+type = "sharepoint"
+path = "/mnt/sharepoint/Design Docs"     # the mounted folder on disk
+dest = "corpus/design-docs"              # under your project root
+include = []                             # optional glob allowlist, e.g. ["*.md", "*.pdf"]
+exclude = ["~$*", "*.tmp"]               # optional glob denylist
+uri_base = "https://contoso.sharepoint.com/sites/eng/Design"  # optional, for click-through provenance
+
+# --- A declared list of web documents -----------------------------------------
+# Fetched via the same path as `graphify add <url>` (papers, pages, videos).
+[[source]]
+name = "papers"
+type = "urls"
+dest = "corpus/papers"
+urls = [
+  "https://arxiv.org/abs/1706.03762",
+]
+# author = "Optional Author"
+# contributor = "Optional Contributor"

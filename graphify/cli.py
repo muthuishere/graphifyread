@@ -908,6 +908,66 @@ def dispatch_command(cmd: str) -> None:
             print(f"error: {exc}", file=sys.stderr)
             sys.exit(1)
 
+    elif cmd == "sync":
+        # Pull declared external sources (graphify.toml [[source]]) into their
+        # corpus dirs so the normal /graphify --update rebuild picks them up.
+        from graphify.sources import load_sources, sync_all
+
+        args = sys.argv[2:]
+        only: str | None = None
+        dry_run = False
+        refresh = False
+        config_path = Path("graphify.toml")
+        project_root = Path(".")
+        i = 0
+        while i < len(args):
+            a = args[i]
+            if a == "--dry-run":
+                dry_run = True; i += 1
+            elif a == "--refresh":
+                refresh = True; i += 1
+            elif a == "--config" and i + 1 < len(args):
+                config_path = Path(args[i + 1]); i += 2
+            elif a.startswith("--config="):
+                config_path = Path(a.split("=", 1)[1]); i += 1
+            elif a.startswith("-"):
+                print(f"error: unknown flag {a!r}", file=sys.stderr)
+                sys.exit(1)
+            else:
+                only = a; i += 1  # positional: sync just this source by name
+
+        try:
+            sources = load_sources(config_path)
+        except Exception as exc:
+            print(f"error: {exc}", file=sys.stderr)
+            sys.exit(1)
+        if not sources:
+            print(
+                f"No sources declared. Add [[source]] tables to {config_path} — see "
+                "'What files it handles' in the README.",
+                file=sys.stderr,
+            )
+            sys.exit(1)
+        if only and only not in {s.name for s in sources}:
+            print(f"error: no source named {only!r} in {config_path}", file=sys.stderr)
+            sys.exit(1)
+
+        results = sync_all(
+            sources, project_root, only=only, dry_run=dry_run, refresh=refresh
+        )
+        header = "Would sync" if dry_run else "Synced"
+        print(f"{header} {len(results)} source(s):")
+        any_error = False
+        for r in results:
+            print(r.summary())
+            for err in r.errors:
+                print(f"      ! {err}", file=sys.stderr)
+                any_error = True
+        if not dry_run and any(r.changed for r in results):
+            print("Run /graphify --update in your AI assistant to rebuild the graph.")
+        if any_error:
+            sys.exit(1)
+
     elif cmd == "watch":
         watch_path = Path(sys.argv[2]) if len(sys.argv) > 2 else Path(".")
         if not watch_path.exists():

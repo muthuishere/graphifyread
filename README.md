@@ -358,6 +358,52 @@ You can also set `GRAPHIFY_GOOGLE_WORKSPACE=1`. Graphify exports shortcuts into
 
 ---
 
+## Syncing external systems (SharePoint, OneDrive, Drive, web docs)
+
+graphify indexes **files on disk**, so bringing in an external system means
+getting its content onto disk and pointing graphify at it. Instead of doing that
+by hand, declare **sources** in a `graphify.toml` at your project root and run
+`graphify sync`:
+
+```toml
+# graphify.toml
+[[source]]
+name = "design-docs"
+type = "sharepoint"                       # a mounted library (OneDrive/rclone) → local mirror
+path = "/mnt/sharepoint/Design Docs"      # where the vendor client / rclone mounts it
+dest = "corpus/design-docs"               # under your project; the pipeline indexes it
+exclude = ["~$*", "*.tmp"]
+uri_base = "https://contoso.sharepoint.com/sites/eng/Design"   # provenance, recorded per file
+
+[[source]]
+name = "papers"
+type = "urls"                             # fetched via `graphify add` under the hood
+dest = "corpus/papers"
+urls = ["https://arxiv.org/abs/1706.03762"]
+```
+
+```bash
+graphify sync                 # pull every source into its dest
+graphify sync design-docs     # just one source, by name
+graphify sync --dry-run       # show what would change, copy nothing
+graphify sync --refresh       # re-fetch url sources even if already pulled
+```
+
+Then run `/graphify --update` to fold the new files into the graph. Sync is:
+
+- **Incremental** — a per-source cursor in `graphify-out/sources.json` (mtime+size
+  for mirrors, fetched-URL set for url lists) means a re-sync only transfers what changed.
+- **Tombstoned** — a mirror deletes `dest` files whose source original disappeared, so
+  removed remote docs stop leaving ghost nodes in the graph.
+- **Provenanced** — each file's origin `uri` is recorded, ready for click-through.
+
+**Source types:** `sharepoint`, `onedrive`, `gdrive`, `local` all mirror a local
+folder (mount it with the vendor sync client or `rclone mount` first); `urls`
+fetches a declared list of links. For live sync, pair with `graphify hook install`
+(rebuild on commit) or a cron/systemd timer that runs `graphify sync` periodically.
+
+---
+
 ## Common commands
 
 ```bash
@@ -376,6 +422,9 @@ graphify export callflow-html      # Mermaid architecture/call-flow HTML (auto-r
 
 /graphify add https://arxiv.org/abs/1706.03762   # fetch a paper and add it
 /graphify add <youtube-url>                       # transcribe and add a video
+
+graphify sync                      # pull declared [[source]] connectors into the corpus
+graphify sync --dry-run            # preview source changes without copying
 
 graphify hook install              # auto-rebuild on git commit
 graphify merge-graphs a.json b.json              # combine two graphs
